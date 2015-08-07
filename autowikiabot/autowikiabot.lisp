@@ -9,6 +9,14 @@
 (defconstant *TEXT-START* "abstract\":")
 (defconstant *DISAMBIGUATION* "disambiguation")
 (defconstant *PUNCTUATION* (list #\! #\? #\.))
+(defconstant *WIKIA-SEARCH-STRING* ".wikia.com/wiki/")
+(defconstant *URL-ENDING-CHARS* (list #\Space
+				      #\# #\$ #\%
+				      #\* #\+ #\, #\- #\.
+				      #\/ #\; #\< #\=
+				      #\> #\@ #\[ #\\
+				      #\] #\^ #\` #\{ #\|
+				      #\} #\~))
 
 (setq drakma:*text-content-types* (cons '("application" . "json") drakma:*text-content-types*))
 
@@ -28,9 +36,9 @@
 
 (defun handle-if-redirect (summary sub-wikia)
   "If the abstract contains a redirect, that is returned to be the new title value"
-  (let ((redirect (search *REDIRECT-STRING* summary)))
+  (let ((redirect (search-add *REDIRECT-STRING* summary)))
     (if redirect
-	(summarize sub-wikia (subseq summary (+ redirect (length *REDIRECT-STRING*))))
+	(summarize sub-wikia (subseq summary redirect))
 	summary)))
 
 (defun get-json (sub-wikia &key title page-id (action 'Details))
@@ -82,6 +90,12 @@
       number
       (write-to-string number)))
 
+(defun search-add (sequence1 sequence2)
+  "Wrapper around search that also adds the length of sequence1 to the result"
+  (let ((search-result (search sequence1 sequence2)))
+    (if search-result
+	(values (+ (length sequence1) search-result) search-result))))
+
 ;; Macro to allow me to access JSON objects easily using nested assoc accesses
 (defmacro assoc-nest (alist &rest assoc-list)
   "Wrapper for a-lists so that items can be grabbed either by key or index.
@@ -128,10 +142,28 @@
 	(lambda (err)
 	  (declare (ignore err))
 	  (invoke-restart 'json:substitute-char "?"))))
-    (let ((ids (get-new-comment-data (get-all-comments))))
-      (loop
-	 for id in ids
-	 do (format t "~a~c" id #\Newline)
-	 finally
-	   (sleep 1)
-	   (grab-comments-continuously)))))
+    (loop while t do
+	 (let ((comments (get-new-comment-data (get-all-comments))))
+	   (loop
+	      for comment in comments
+	      do (multiple-value-bind (title sub-wikia)
+		     (find-wikia-reference (cdr comment))
+		   (when title
+		     (reply-to-comment user (car comment)
+				       (summarize sub-wikia title))))
+	      finally
+		(sleep 1))))))
+
+(defun find-wikia-reference (comment)
+  "Searches the comment for any reference to a wikia link.
+  Returns the title and the sub-wikia the reference was found on"
+  
+  (multiple-value-bind (url-end url-start)
+      (search-add *WIKIA-SEARCH-STRING* comment)
+    (let ((wikia-title-start (1+ (position #\/ comment
+					   :from-end t
+					   :end url-start)))
+	  (title-end (or (find-multiple comment *URL-ENDING-CHARS* url-end)
+			 (length comment))))
+      (values (subseq comment url-end title-end)
+	      (subseq comment wikia-title-start url-start)))))
