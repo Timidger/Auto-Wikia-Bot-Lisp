@@ -10,13 +10,10 @@
 (defconstant *DISAMBIGUATION* "disambiguation")
 (defconstant *PUNCTUATION* (list #\! #\? #\.))
 (defconstant *WIKIA-SEARCH-STRING* ".wikia.com/wiki/")
-(defconstant *URL-ENDING-CHARS* (list #\Space
-				      #\# #\$ #\%
-				      #\* #\+ #\, #\- #\.
-				      #\/ #\; #\< #\=
-				      #\> #\@ #\[ #\\
-				      #\] #\^ #\` #\{ #\|
-				      #\} #\~))
+(defconstant *URL-REGEX-SEARCH-STRING*
+  (concatenate 'string
+	       "(http|ftp|https):\/\/([\\w\\-\\_]+(?:(?:\.[\\w\\-\\_]+)+))"
+	       "([\\w\\-\\.,@?'^=%&amp;:/~\+#]*[\\w\\-\\@?'^=%&amp;/~\+#])?"))
 
 (setq drakma:*text-content-types* (cons '("application" . "json") drakma:*text-content-types*))
 
@@ -157,6 +154,16 @@
 (defun find-wikia-reference (comment)
   "Searches the comment for any reference to a wikia link.
   Returns the title and the sub-wikia the reference was found on"
+  (let* ((url (cl-ppcre:scan-to-strings *URL-REGEX-SEARCH-STRING* comment))
+	 (title (subseq url (search-add "/wiki/" url))))
+    (multiple-value-bind (_ sub-wikia)
+	(cl-ppcre:scan-to-strings "http:\/\/(.*\.wikia)"
+						   url)
+      (values title (subseq (elt sub-wikia 0) 0 (- (length (elt sub-wikia 0)) 6))))))
+    
+    
+
+	     
   
   (multiple-value-bind (url-end url-start)
       (search-add *WIKIA-SEARCH-STRING* comment)

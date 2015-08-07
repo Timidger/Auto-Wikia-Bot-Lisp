@@ -9,6 +9,7 @@
   :serial t
   :components ((:file "drakma")
                (:file "cl-json")
-               (:file "cl-reddit"))
+               (:file "cl-reddit")
+	       (:file "cl-ppcre")
   ; Depends on nothing I guess?
   :depends-on (:drakma :cl-json :cl-reddit))
