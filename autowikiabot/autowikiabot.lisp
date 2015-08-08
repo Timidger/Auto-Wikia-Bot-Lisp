@@ -132,28 +132,31 @@
 	   (loop
 	      for comment in comments
 	      do (multiple-value-bind (title sub-wikia)
-		     (find-wikia-reference (cdr comment))
+		     (find-wikia-reference (cl-reddit:comment-body comment))
 		   (when (and title (not (replied-yet-p *USER* comment)))
-		     (reply-to-comment *USER* (car comment)
-				       (summarize sub-wikia title))))
+		     (format t "Summary: ~a ~c Body: ~a"
+			     (summarize sub-wikia title)
+			     #\NewLine
+			     (cl-reddit:comment-body comment))))
+		     ;(reply-to-comment *USER* (car comment)
+	;			       (summarize sub-wikia title))))
 	      finally
 		(sleep 1))))))
 
 (defun find-wikia-reference (comment)
   "Searches the comment for any reference to a wikia link.
   Returns the title and the sub-wikia the reference was found on"
-  (let* ((url (cl-ppcre:scan-to-strings *URL-REGEX-SEARCH-STRING* comment))
-	 (title (subseq url (search-add "/wiki/" url))))
-    (multiple-value-bind (_ sub-wikia)
-	(cl-ppcre:scan-to-strings "http:\/\/(.*\.wikia)"
-						   url)
-      (values title (subseq (elt sub-wikia 0) 0
-			    (- (length (elt sub-wikia 0)) 6))))))
+  (let ((url (cl-ppcre:scan-to-strings *URL-REGEX-SEARCH-STRING* comment)))
+    (multiple-value-bind (is-wikia sub-wikia)
+	(cl-ppcre:scan-to-strings "http:\/\/(.*\.wikia)" url)
+      (if is-wikia
+	  (let ((title (subseq url (search-add "/wiki/" url))))
+	    (values title (subseq (elt sub-wikia 0) 0
+				    (- (length (elt sub-wikia 0)) 6))))))))
 
 (defun replied-yet-p (user comment)
   "Determines if the user has replied to the comment yet"
-  (let ((replies (cl-reddit:comment-replies comment))
+  (let ((replies (butlast (cl-reddit:comment-replies comment)))
 	(user-name (cl-reddit:user-username user)))
     (hofeach #'some reply replies
       (string= user-name (cl-reddit:comment-author reply)))))
-
