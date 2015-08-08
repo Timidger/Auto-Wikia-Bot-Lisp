@@ -150,3 +150,10 @@
       (values title (subseq (elt sub-wikia 0) 0
 			    (- (length (elt sub-wikia 0)) 6))))))
 
+(defun replied-yet-p (user comment)
+  "Determines if the user has replied to the comment yet"
+  (let ((replies (cl-reddit:comment-replies comment))
+	(user-name (cl-reddit:user-username user)))
+    (hofeach #'some reply replies
+      (string= user-name (cl-reddit:comment-author reply)))))
+
