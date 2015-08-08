@@ -3,17 +3,19 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require :drakma)
   (require :cl-json)
+  (require :yason)
   (require :cl-reddit))
 
-(defconstant *REDIRECT-STRING* "REDIRECT ")
-(defconstant *TEXT-START* "abstract\":")
-(defconstant *DISAMBIGUATION* "disambiguation")
-(defconstant *PUNCTUATION* (list #\! #\? #\.))
-(defconstant *WIKIA-SEARCH-STRING* ".wikia.com/wiki/")
-(defconstant *URL-REGEX-SEARCH-STRING*
+(defparameter *REDIRECT-STRING* "REDIRECT ")
+(defparameter *TEXT-START* "abstract\":")
+(defparameter *DISAMBIGUATION* "disambiguation")
+(defparameter *PUNCTUATION* (list #\! #\? #\.))
+(defparameter *WIKIA-SEARCH-STRING* ".wikia.com/wiki/")
+(defparameter *URL-REGEX-SEARCH-STRING*
   (concatenate 'string
 	       "(http|ftp|https):\/\/([\\w\\-\\_]+(?:(?:\.[\\w\\-\\_]+)+))"
 	       "([\\w\\-\\.,@?'^=%&amp;:/~\+#]*[\\w\\-\\@?'^=%&amp;/~\+#])?"))
+(defparameter *USER* nil)
 
 (setq drakma:*text-content-types* (cons '("application" . "json") drakma:*text-content-types*))
 
@@ -92,39 +94,25 @@
   (let ((search-result (search sequence1 sequence2)))
     (if search-result
 	(values (+ (length sequence1) search-result) search-result))))
-
-;; Macro to allow me to access JSON objects easily using nested assoc accesses
-(defmacro assoc-nest (alist &rest assoc-list)
-  "Wrapper for a-lists so that items can be grabbed either by key or index.
-  assoc-list is a list of keys/indexes that are accessed sequentually from the
-  provided alist. When bounds are overstepped, nil is returned"
-  (let ((nested-assoc-accesses (gensym)))
-    (setf nested-assoc-accesses alist)
-    (loop
-       for item in assoc-list
-       do
-	 (if (numberp item)
-	     (setf nested-assoc-accesses `(nth ,item ,nested-assoc-accesses))
-	     (setf nested-assoc-accesses `(cdr (assoc ,(intern (string-upcase (symbol-name (cadr item))) "KEYWORD") ,nested-assoc-accesses))))
-	 
-       finally (return nested-assoc-accesses))))
-
+       
+(defun symbol->keyword (symbol)
+  (intern (symbol-name symbol) "KEYWORD"))
 
 (defun get-new-comment-data (json)
-  "Get the data from the comments in the JSON from http://reddit.com/comments.json"
-  (let ((comments (assoc-nest json 'data 'children)))
+  "Get the data from the comments in the JSON from
+  http://reddit.com/comments.json"
+  (let ((comments (gethash "children" (gethash "data" json))))
     (hofeach #'mapcar comment comments
-	(list (assoc-nest comment 'data 'id)
-	      (assoc-nest comment 'data 'body)))))
+      (cl-reddit:comment-from-json (gethash "data" comment)))))
 
 (defun get-all-comments ()
   "Grab the next set of (25) comments"
-  (json:decode-json-from-string
+  (yason:parse
    (drakma:http-request "http://reddit.com/comments.json"
 			:method :get
 			:user-agent cl-reddit:*user-agent*
 			:preserve-uri t)))
-
+ 
 ;; TODO: Make the t1_ come about automagically (it's the "kind" value in JSON)
 (defun reply-to-comment (user id text)
   "Posts a reply to the id of the given comment (omit t1_)"
@@ -145,8 +133,8 @@
 	      for comment in comments
 	      do (multiple-value-bind (title sub-wikia)
 		     (find-wikia-reference (cdr comment))
-		   (when title
-		     (reply-to-comment user (car comment)
+		   (when (and title (not (replied-yet-p *USER* comment)))
+		     (reply-to-comment *USER* (car comment)
 				       (summarize sub-wikia title))))
 	      finally
 		(sleep 1))))))
@@ -159,18 +147,6 @@
     (multiple-value-bind (_ sub-wikia)
 	(cl-ppcre:scan-to-strings "http:\/\/(.*\.wikia)"
 						   url)
-      (values title (subseq (elt sub-wikia 0) 0 (- (length (elt sub-wikia 0)) 6))))))
-    
-    
+      (values title (subseq (elt sub-wikia 0) 0
+			    (- (length (elt sub-wikia 0)) 6))))))
 
-	     
-  
-  (multiple-value-bind (url-end url-start)
-      (search-add *WIKIA-SEARCH-STRING* comment)
-    (let ((wikia-title-start (1+ (position #\/ comment
-					   :from-end t
-					   :end url-start)))
-	  (title-end (or (find-multiple comment *URL-ENDING-CHARS* url-end)
-			 (length comment))))
-      (values (subseq comment url-end title-end)
-	      (subseq comment wikia-title-start url-start)))))
