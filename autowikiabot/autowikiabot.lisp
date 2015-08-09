@@ -108,7 +108,7 @@
 (defun get-all-comments ()
   "Grab the next set of (25) comments"
   (yason:parse
-   (drakma:http-request "http://reddit.com/comments.json"
+   (drakma:http-request "http://reddit.com/all/comments.json"
 			:method :get
 			:user-agent cl-reddit:*user-agent*
 			:preserve-uri t)))
@@ -122,18 +122,19 @@
 
 (defun grab-comments-continuously ()
   "Grabs all new comments that are posted to Reddit continuously"
-  (handler-bind
-      ((json:unencodable-value-error
-	(lambda (err)
-	  (declare (ignore err))
-	  (invoke-restart 'json:substitute-char "?"))))
+;  (handler-bind
+;      ((json:unencodable-value-error
+;	(lambda (err)
+;	  (declare (ignore err))
+;	  (invoke-restart 'json:substitute-char "?"))))
     (loop while t do
 	 (let ((comments (get-new-comment-data (get-all-comments))))
 	   (loop
 	      for comment in comments
-	      do (multiple-value-bind (title sub-wikia)
+	      do ;(format t "~a" (find-wikia-reference (cl-reddit:comment-body comment)))
+	 	(multiple-value-bind (title sub-wikia)
 		     (find-wikia-reference (cl-reddit:comment-body comment))
-		   (when (and title (not (replied-yet-p *USER* comment)))
+		   (when title ;(not (replied-yet-p *USER* comment)))
 		     (format t "Summary: ~a ~c Body: ~a"
 			     (summarize sub-wikia title)
 			     #\NewLine
@@ -141,7 +142,7 @@
 		     ;(reply-to-comment *USER* (car comment)
 	;			       (summarize sub-wikia title))))
 	      finally
-		(sleep 1))))))
+		(sleep 2)))))
 
 (defun find-wikia-reference (comment)
   "Searches the comment for any reference to a wikia link.
