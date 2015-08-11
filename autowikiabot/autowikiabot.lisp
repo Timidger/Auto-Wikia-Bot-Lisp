@@ -116,6 +116,9 @@
 ;; TODO: Make the t1_ come about automagically (it's the "kind" value in JSON)
 (defun reply-to-comment (user id text)
   "Posts a reply to the id of the given comment (omit t1_)"
+  (let ((text "#####&#009;\n\n######&#009;\n\n####&#009;\n"+reply+"\n\n^Parent ^commenter ^can [^toggle ^NSFW](http://www.reddit.com/message/compose?to=autowikiabot&subject=AutoW
+    ikibot NSFW toggle&message=%2Btoggle-nsfw+____id____) ^or[](#or) [^delete](http://www.reddit.com/message/compose?to=autowikiabot&subject=AutoWikibot Deletion&message=%2Bdelete+    ____id____)^. ^Will ^also ^delete ^on ^comment ^score ^of ^-1 ^or ^less. ^| [^(FAQs)](http://www.reddit.com/r/autowikiabot/wiki/index) ^|  [^Source](https://github.com/Timidger    /autowikiabot-py)\n ^(Please note this bot is in testing. Any help would be greatly appreciated, even if it is just a bug report! Please checkout the) [^source ^code](https://g    ithub.com/Timidger/autowikiabot-py) ^(to submit bugs)"))
+
   (cl-reddit:api-comment user
 			 :thing-id (concatenate 'string "t1_" id)
 			 :text text))
@@ -127,8 +130,10 @@
 ;	(lambda (err)
 ;	  (declare (ignore err))
 ;	  (invoke-restart 'json:substitute-char "?"))))
-  (let ((last-comment nil))
+  (let ((last-comment nil)
+	(summary-count 0))
     (loop while t do
+	 (format t "Grabbing new comments... ")
 	 (let ((comments (get-new-comment-data (get-all-comments))))
 	   (loop
 	      for comment in comments
@@ -136,16 +141,16 @@
 	      do ;(format t "~a" (find-wikia-reference (cl-reddit:comment-body comment)))
 	 	(multiple-value-bind (title sub-wikia)
 		    (find-wikia-reference (cl-reddit:comment-body comment))
-		  (when title ;(not (replied-yet-p *USER* comment)))
-		    (format t "Summary: ~a ~c Body: ~a"
-			    (summarize sub-wikia title)
-			    #\NewLine
-			    (cl-reddit:comment-body comment))))
-					;(reply-to-comment *USER* (car comment)
-					;(summarize sub-wikia title))))
+		  (when (and title (not (replied-yet-p *USER* comment)))
+		    (reply-to-comment *USER*
+				      (cl-reddit:comment-id comment)
+				      (summarize sub-wikia title))
+		    (setf summary-count (1+ summary-count))
+		    (format t "~a Summary Packaged!" summary-count)))
 	      finally
 		(setf last-comment (cl-reddit:comment-id (car comments)))
-		(sleep 2))))))
+		(format t "Sleeping, ~a ~c" last-comment #\Newline)
+		(sleep 60))))))
 
 (defun find-wikia-reference (comment)
   "Searches the comment for any reference to a wikia link.
