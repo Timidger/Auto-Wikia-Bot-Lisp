@@ -106,9 +106,9 @@
       (cl-reddit:comment-from-json (gethash "data" comment)))))
 
 (defun get-all-comments ()
-  "Grab the next set of (25) comments"
+  "Grab the next set of (1000) comments"
   (yason:parse
-   (drakma:http-request "http://reddit.com/all/comments.json"
+   (drakma:http-request "http://reddit.com/comments.json?limit=1000"
 			:method :get
 			:user-agent cl-reddit:*user-agent*
 			:preserve-uri t)))
@@ -127,22 +127,25 @@
 ;	(lambda (err)
 ;	  (declare (ignore err))
 ;	  (invoke-restart 'json:substitute-char "?"))))
+  (let ((last-comment nil))
     (loop while t do
 	 (let ((comments (get-new-comment-data (get-all-comments))))
 	   (loop
 	      for comment in comments
+	      while (not (equal (cl-reddit:comment-id comment) last-comment))
 	      do ;(format t "~a" (find-wikia-reference (cl-reddit:comment-body comment)))
 	 	(multiple-value-bind (title sub-wikia)
-		     (find-wikia-reference (cl-reddit:comment-body comment))
-		   (when title ;(not (replied-yet-p *USER* comment)))
-		     (format t "Summary: ~a ~c Body: ~a"
-			     (summarize sub-wikia title)
-			     #\NewLine
-			     (cl-reddit:comment-body comment))))
-		     ;(reply-to-comment *USER* (car comment)
-	;			       (summarize sub-wikia title))))
+		    (find-wikia-reference (cl-reddit:comment-body comment))
+		  (when title ;(not (replied-yet-p *USER* comment)))
+		    (format t "Summary: ~a ~c Body: ~a"
+			    (summarize sub-wikia title)
+			    #\NewLine
+			    (cl-reddit:comment-body comment))))
+					;(reply-to-comment *USER* (car comment)
+					;(summarize sub-wikia title))))
 	      finally
-		(sleep 2)))))
+		(setf last-comment (cl-reddit:comment-id (car comments)))
+		(sleep 2))))))
 
 (defun find-wikia-reference (comment)
   "Searches the comment for any reference to a wikia link.
